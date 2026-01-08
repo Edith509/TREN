@@ -763,9 +763,14 @@ router.post("/api/admin/trainings/:id/delete", async (req: Request, res: Respons
 			return;
 		}
 
-		const filter = adminTelegramId
-			? { _id: req.params.id, adminTelegramId }
-			: { _id: req.params.id };
+		const filter = {
+			_id: req.params.id,
+			$or: [
+				{ adminTelegramId },
+				{ adminTelegramId: { $exists: false } },
+				{ adminTelegramId: null },
+			],
+		};
 		const order = await Order.findOne(filter)
 			.select("telegramUserId attachmentUrl status")
 			.lean<OrderDoc | null>();

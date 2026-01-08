@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>KlimTrener Admin</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      :root {
+        color-scheme: light;
+      }
+
+      @keyframes fadeSlide {
+        from {
+          opacity: 0;
+          transform: translateY(8px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+    </style>
+  </head>
+  <body
+    class="min-h-screen overflow-x-hidden bg-slate-50 font-['Manrope'] text-slate-900"
+    data-admin-id="<%= adminTelegramId || '' %>"
+  >
+    <% const linkBase = "border-b-2 border-transparent pb-1 text-sm font-medium transition"; %>
+    <% const mobileLinkBase = "rounded-lg px-3 py-2 text-sm font-medium transition"; %>
+
+    <header class="sticky top-0 z-20 border-b border-slate-200 bg-white/90 backdrop-blur">
+      <div class="mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-3">
+        <div class="flex items-center gap-3">
+          <div class="grid h-9 w-9 place-items-center rounded-xl border-2 border-blue-600/20 text-xs font-bold text-blue-600">
+            KT
+          </div>
+          <div class="leading-tight">
+            <div class="text-sm font-semibold">Админка</div>
+            <div class="text-xs text-slate-500">KlimTrener</div>
+          </div>
+        </div>
+
+        <button
+          id="menuToggle"
+          class="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 md:hidden"
+          type="button"
+          aria-expanded="false"
+          aria-controls="menuDropdown"
+        >
+          Меню
+          <span class="text-base">☰</span>
+        </button>
+
+        <nav class="hidden items-center gap-6 md:flex">
+          <a
+            class="<%= linkBase %> <%= activePage === 'main' ? 'border-blue-600 text-slate-900' : 'text-slate-500 hover:text-slate-900' %>"
+            href="/admin/main"
+          >
+            Главная
+          </a>
+          <a
+            class="<%= linkBase %> <%= activePage === 'requests' ? 'border-blue-600 text-slate-900' : 'text-slate-500 hover:text-slate-900' %>"
+            href="/admin/requests"
+          >
+            Входящие
+          </a>
+          <a
+            class="<%= linkBase %> <%= activePage === 'users' ? 'border-blue-600 text-slate-900' : 'text-slate-500 hover:text-slate-900' %>"
+            href="/admin/users"
+          >
+            Пользователи
+          </a>
+          <a
+            class="<%= linkBase %> <%= activePage === 'settings' ? 'border-blue-600 text-slate-900' : 'text-slate-500 hover:text-slate-900' %>"
+            href="/admin/settings"
+          >
+            Настройки
+          </a>
+        </nav>
+      </div>
+
+      <div id="menuDropdown" class="hidden border-t border-slate-200 bg-white md:hidden">
+        <nav class="mx-auto flex w-full max-w-6xl flex-col gap-1 px-4 py-3">
+          <a
+            class="<%= mobileLinkBase %> <%= activePage === 'main' ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-50' %>"
+            href="/admin/main"
+          >
+            Главная
+          </a>
+          <a
+            class="<%= mobileLinkBase %> <%= activePage === 'requests' ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-50' %>"
+            href="/admin/requests"
+          >
+            Входящие
+          </a>
+          <a
+            class="<%= mobileLinkBase %> <%= activePage === 'users' ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-50' %>"
+            href="/admin/users"
+          >
+            Пользователи
+          </a>
+          <a
+            class="<%= mobileLinkBase %> <%= activePage === 'settings' ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-50' %>"
+            href="/admin/settings"
+          >
+            Настройки
+          </a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="mx-auto w-full max-w-6xl px-4 pb-16 pt-6">
+      <%- body %>
+    </main>
+
+    <script>
+      const menuToggle = document.getElementById("menuToggle");
+      const menuDropdown = document.getElementById("menuDropdown");
+
+      if (menuToggle && menuDropdown) {
+        menuToggle.addEventListener("click", () => {
+          const isOpen = menuDropdown.classList.toggle("hidden") === false;
+          menuToggle.setAttribute("aria-expanded", String(isOpen));
+        });
+      }
+    </script>
+  </body>
+</html>

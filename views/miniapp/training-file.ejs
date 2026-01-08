@@ -1,0 +1,61 @@
+<% layout("/miniapp/layout.ejs") %>
+
+<section class="grid gap-6 animate-[fadeSlide_0.45s_ease]">
+  <section class="rounded-2xl border border-slate-200 bg-white p-5">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <h3 class="text-base font-semibold text-slate-900">Файл тренировки</h3>
+        <p class="mt-1 text-sm text-slate-500"><%= fileName || "Без имени" %></p>
+        <% if (sheetName) { %>
+          <p class="mt-1 text-xs text-slate-400">Лист: <%= sheetName %></p>
+        <% } %>
+      </div>
+      <% if (attachmentUrl) { %>
+        <a
+          class="inline-flex items-center justify-center rounded-lg border border-slate-200 px-4 py-2 text-xs font-semibold text-blue-700 transition hover:bg-blue-50"
+          href="<%= attachmentUrl %>"
+          download
+        >
+          Скачать
+        </a>
+      <% } %>
+    </div>
+  </section>
+
+  <section class="rounded-2xl border border-slate-200 bg-white p-5">
+    <% if (error) { %>
+      <div class="rounded-xl border border-rose-200 bg-rose-50 px-4 py-5 text-center text-sm text-rose-600">
+        <%= error %>
+      </div>
+    <% } else if (!rows.length && !header.length) { %>
+      <div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-5 text-center text-sm text-slate-500">
+        Файл пустой или не содержит таблицу.
+      </div>
+    <% } else { %>
+      <div class="-mx-5 overflow-x-auto">
+        <div class="inline-block min-w-full px-5">
+          <table class="min-w-max w-full border-collapse text-sm">
+          <% if (header.length) { %>
+            <thead class="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+              <tr>
+                <% header.forEach((cell) => { %>
+                  <th class="border-b border-slate-200 px-3 py-3 font-semibold text-slate-600"><%= cell || " " %></th>
+                <% }) %>
+              </tr>
+            </thead>
+          <% } %>
+          <tbody class="text-slate-700">
+            <% rows.forEach((row, rowIndex) => { %>
+              <tr class="<%= rowIndex % 2 === 0 ? 'bg-white' : 'bg-slate-50/70' %>">
+                <% row.forEach((cell) => { %>
+                  <td class="border-b border-slate-100 px-3 py-3"><%= cell || " " %></td>
+                <% }) %>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+        </div>
+      </div>
+    <% } %>
+  </section>
+</section>

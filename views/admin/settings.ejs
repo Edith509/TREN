@@ -1,0 +1,234 @@
+<% layout("/admin/layout.ejs") %>
+
+<section class="grid gap-6 animate-[fadeSlide_0.45s_ease]">
+  <section class="rounded-2xl border border-slate-200 bg-white p-6">
+    <h1 class="text-xl font-semibold text-slate-900">Настройки</h1>
+    <p class="mt-2 text-sm text-slate-500">Управляйте целями тренировок и поддерживайте список актуальных вариантов.</p>
+  </section>
+
+  <section class="rounded-2xl border border-slate-200 bg-white p-6">
+    <div class="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
+      <div class="space-y-1">
+        <h2 class="text-base font-semibold text-slate-900">Цели тренировок</h2>
+        <p class="text-sm text-slate-500">Добавляйте новые цели и удаляйте старые в один клик.</p>
+      </div>
+
+      <form id="goalForm" class="grid w-full max-w-xl gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+        <label class="grid gap-2">
+          <span class="text-xs font-semibold text-slate-500">Новая цель</span>
+          <input
+            id="goalTitle"
+            class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:border-blue-400 focus:outline-none"
+            type="text"
+            placeholder="Например: Снижение веса"
+            maxlength="80"
+            required
+          />
+        </label>
+        <button class="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-500" type="submit">
+          Добавить цель
+        </button>
+      </form>
+    </div>
+
+    <div class="mt-6 grid gap-3" id="goalList">
+      <div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-5 text-center text-sm text-slate-500">
+        Загружаем цели...
+      </div>
+    </div>
+  </section>
+</section>
+
+<div id="deleteModal" class="fixed inset-0 z-30 hidden items-center justify-center bg-slate-900/40 px-4">
+  <div class="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+    <div class="flex items-start gap-3">
+      <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-rose-50 text-rose-600">
+        <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path
+            d="M3.5 5.5h17M9 3.5h6M9.75 9v8.5M14.25 9v8.5M6.75 5.5l.75 14a2 2 0 0 0 2 1.8h5a2 2 0 0 0 2-1.8l.75-14"
+            stroke="currentColor"
+            stroke-width="1.6"
+            stroke-linecap="round"
+          />
+        </svg>
+      </div>
+      <div class="space-y-2">
+        <h3 class="text-lg font-semibold text-slate-900">Удалить цель?</h3>
+        <p class="text-sm text-slate-500">
+          Цель <span id="deleteGoalTitle" class="font-semibold text-slate-900"></span> будет удалена из активного списка.
+        </p>
+      </div>
+    </div>
+    <div class="mt-6 flex flex-wrap justify-end gap-2">
+      <button
+        id="cancelDelete"
+        class="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+        type="button"
+      >
+        Отмена
+      </button>
+      <button
+        id="confirmDelete"
+        class="inline-flex items-center justify-center rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-rose-500"
+        type="button"
+      >
+        Удалить
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+  const adminId = document.body.dataset.adminId;
+  const initData = window.Telegram?.WebApp?.initData || "";
+  const initHeaders = initData ? { "x-telegram-init-data": initData } : {};
+  const query = adminId ? `?adminTelegramId=${adminId}` : "";
+  const listEl = document.getElementById("goalList");
+  const formEl = document.getElementById("goalForm");
+  const titleInput = document.getElementById("goalTitle");
+  const modal = document.getElementById("deleteModal");
+  const modalTitle = document.getElementById("deleteGoalTitle");
+  const confirmBtn = document.getElementById("confirmDelete");
+  const cancelBtn = document.getElementById("cancelDelete");
+
+  let pendingDeleteId = null;
+
+  function renderEmpty() {
+    listEl.innerHTML = `
+      <div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-5 text-center text-sm text-slate-500">
+        Пока нет целей. Добавьте первую.
+      </div>
+    `;
+  }
+
+  function renderGoals(items) {
+    if (!items.length) {
+      renderEmpty();
+      return;
+    }
+
+    listEl.innerHTML = items
+      .map(
+        (goal) => `
+        <div class="flex items-center justify-between gap-4 rounded-xl border border-slate-200 bg-white px-4 py-4">
+          <div class="flex items-center gap-3">
+            <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+              <span class="text-sm font-semibold">#</span>
+            </div>
+            <div>
+              <div class="text-sm font-semibold text-slate-900">${goal.title}</div>
+              <div class="text-xs text-slate-500">ID: ${goal.id}</div>
+            </div>
+          </div>
+          <button
+            class="inline-flex items-center justify-center rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-rose-600 transition hover:bg-rose-50"
+            data-action="delete"
+            data-goal-id="${goal.id}"
+            data-goal-title="${goal.title}"
+            type="button"
+            aria-label="Удалить цель"
+          >
+            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path
+                d="M3.5 5.5h17M9 3.5h6M9.75 9v8.5M14.25 9v8.5M6.75 5.5l.75 14a2 2 0 0 0 2 1.8h5a2 2 0 0 0 2-1.8l.75-14"
+                stroke="currentColor"
+                stroke-width="1.6"
+                stroke-linecap="round"
+              />
+            </svg>
+          </button>
+        </div>
+      `,
+      )
+      .join("");
+  }
+
+  async function loadGoals() {
+    const res = await fetch(`/api/admin/goals${query}`, { headers: initHeaders });
+    if (!res.ok) {
+      listEl.innerHTML = `
+        <div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-5 text-center text-sm text-slate-500">
+          Не удалось загрузить список целей.
+        </div>
+      `;
+      return;
+    }
+    const data = await res.json();
+    renderGoals(data.items || []);
+  }
+
+  function openModal(id, title) {
+    pendingDeleteId = id;
+    modalTitle.textContent = title;
+    modal.classList.remove("hidden");
+    modal.classList.add("flex");
+  }
+
+  function closeModal() {
+    pendingDeleteId = null;
+    modal.classList.add("hidden");
+    modal.classList.remove("flex");
+  }
+
+  formEl.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const title = titleInput.value.trim();
+    if (!title) {
+      titleInput.focus();
+      return;
+    }
+    const submitButton = formEl.querySelector("button[type='submit']");
+    submitButton.disabled = true;
+    try {
+      const res = await fetch(`/api/admin/goals${query}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...initHeaders },
+        body: JSON.stringify({ title }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        alert(data.message || "Не удалось добавить цель.");
+        return;
+      }
+      titleInput.value = "";
+      loadGoals();
+    } finally {
+      submitButton.disabled = false;
+    }
+  });
+
+  listEl.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-action='delete']");
+    if (!button) return;
+    openModal(button.dataset.goalId, button.dataset.goalTitle);
+  });
+
+  confirmBtn.addEventListener("click", async () => {
+    if (!pendingDeleteId) return;
+    confirmBtn.disabled = true;
+    try {
+      const res = await fetch(`/api/admin/goals/${pendingDeleteId}${query}`, {
+        method: "DELETE",
+        headers: initHeaders,
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        alert(data.message || "Не удалось удалить цель.");
+        return;
+      }
+      closeModal();
+      loadGoals();
+    } finally {
+      confirmBtn.disabled = false;
+    }
+  });
+
+  cancelBtn.addEventListener("click", closeModal);
+  modal.addEventListener("click", (event) => {
+    if (event.target === modal) {
+      closeModal();
+    }
+  });
+
+  loadGoals();
+</script>

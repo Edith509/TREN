@@ -1,0 +1,201 @@
+<% layout("/admin/layout.ejs") %>
+
+<section class="grid gap-6 animate-[fadeSlide_0.45s_ease]">
+  <section class="rounded-2xl border border-slate-200 bg-white p-6">
+    <h3 class="text-base font-semibold text-slate-900">Входящие заявки</h3>
+    <p class="mt-2 text-sm text-slate-500">
+      Новые заявки на тренировки. Для принятия обязателен Excel-файл с планом.
+    </p>
+  </section>
+
+  <section class="rounded-2xl border border-slate-200 bg-white p-6">
+    <div class="grid gap-4" id="requestList">
+      <div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-5 text-center text-sm text-slate-500">
+        Загружаем заявки...
+      </div>
+    </div>
+  </section>
+</section>
+
+<script>
+  const adminId = document.body.dataset.adminId;
+  const initData = window.Telegram?.WebApp?.initData || "";
+  const initHeaders = initData ? { "x-telegram-init-data": initData } : {};
+  const query = adminId ? `?adminTelegramId=${adminId}` : "";
+  const listEl = document.getElementById("requestList");
+
+  function formatGoal(goalTitle) {
+    return goalTitle || "Не указана";
+  }
+
+  function isExcelFile(file) {
+    const name = file?.name?.toLowerCase() || "";
+    return name.endsWith(".xls") || name.endsWith(".xlsx");
+  }
+
+  function renderRequest(item) {
+    const initials = `${item.firstName?.[0] || ""}${item.lastName?.[0] || ""}`.trim() || "?";
+    return `
+      <div class="grid gap-4 rounded-xl border border-slate-200 bg-white p-4" data-order-id="${item.id}">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div class="flex items-center gap-3">
+            <div class="flex h-12 w-12 items-center justify-center overflow-hidden rounded-xl bg-slate-100 text-sm font-semibold text-slate-500">
+              ${item.photoUrl ? `<img class="h-full w-full object-cover" src="${item.photoUrl}" alt="Фото" />` : initials}
+            </div>
+            <div>
+              <div class="text-sm font-semibold text-slate-900">${item.firstName || "Пользователь"} ${item.lastName || ""}</div>
+              <div class="text-xs text-slate-500">@${item.username || "username не задан"}</div>
+              <div class="text-xs text-slate-400">tg:${item.telegramUserId}</div>
+            </div>
+          </div>
+          <span class="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
+            Ожидает
+          </span>
+        </div>
+        <div class="grid gap-2 text-sm text-slate-600">
+          <div class="flex items-center justify-between">
+            <span>Имя</span>
+            <span class="font-medium text-slate-900">${item.fullName || "не указано"}</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span>Телефон</span>
+            <span class="font-medium text-slate-900">${item.phoneNumber || "не указан"}</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span>Возраст</span>
+            <span class="font-medium text-slate-900">${item.age || "не указан"}</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span>Рост</span>
+            <span class="font-medium text-slate-900">${item.heightCm ? `${item.heightCm} см` : "не указан"}</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span>Вес</span>
+            <span class="font-medium text-slate-900">${item.weightKg ? `${item.weightKg} кг` : "не указан"}</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span>Цель</span>
+            <span class="font-medium text-slate-900">${formatGoal(item.goalTitle)}</span>
+          </div>
+          <div>
+            <div class="text-xs text-slate-500">Противопоказания</div>
+            <div class="mt-1 text-sm text-slate-900">${item.medicalContraindications || "не указаны"}</div>
+          </div>
+        </div>
+        <div class="grid gap-3">
+          <label class="grid gap-2">
+            <span class="text-xs font-semibold text-slate-500">Excel-файл тренировки (.xls/.xlsx)</span>
+            <input
+              class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 focus:border-blue-400 focus:outline-none file:mr-3 file:rounded-md file:border-0 file:bg-blue-50 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-blue-700"
+              type="file"
+              accept=".xls,.xlsx"
+              data-file-input
+            />
+          </label>
+          <div class="flex flex-wrap gap-2">
+            <button class="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-500" data-action="accept">
+              Принять
+            </button>
+            <button class="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50" data-action="decline">
+              Отклонить
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function readFileAsDataUrl(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(new Error("Не удалось прочитать файл"));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function loadRequests() {
+    const res = await fetch(`/api/admin/requests${query}`, { headers: initHeaders });
+    if (!res.ok) {
+      listEl.innerHTML = `
+        <div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-5 text-center text-sm text-slate-500">
+          Не удалось загрузить заявки.
+        </div>
+      `;
+      return;
+    }
+    const data = await res.json();
+    const items = data.items || [];
+    if (!items.length) {
+      listEl.innerHTML = `
+        <div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-5 text-center text-sm text-slate-500">
+          Пока нет новых заявок.
+        </div>
+      `;
+      return;
+    }
+    listEl.innerHTML = items.map(renderRequest).join("");
+  }
+
+  async function handleAction(card, action) {
+    const orderId = card.dataset.orderId;
+    const fileInput = card.querySelector("[data-file-input]");
+    const payload = {
+      adminTelegramId: adminId ? Number(adminId) : undefined,
+    };
+
+    if (action === "accept") {
+      if (!fileInput?.files?.length) {
+        alert("Для принятия нужен Excel-файл тренировки.");
+        return;
+      }
+      const file = fileInput.files[0];
+      if (!isExcelFile(file)) {
+        alert("Поддерживаются только .xls и .xlsx файлы.");
+        return;
+      }
+      const dataUrl = await readFileAsDataUrl(file);
+      payload.attachmentData = dataUrl;
+      payload.attachmentName = file.name;
+      payload.attachmentMimeType = file.type;
+    }
+
+    const res = await fetch(`/api/admin/requests/${orderId}/${action}${query}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...initHeaders },
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      alert(errorData.message || "Не удалось обновить заявку.");
+      return;
+    }
+
+    card.remove();
+    if (!listEl.children.length) {
+      listEl.innerHTML = `
+        <div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-5 text-center text-sm text-slate-500">
+          Пока нет новых заявок.
+        </div>
+      `;
+    }
+  }
+
+  listEl.addEventListener("click", async (event) => {
+    const button = event.target.closest("button[data-action]");
+    if (!button) return;
+    const card = button.closest("[data-order-id]");
+    if (!card) return;
+    button.disabled = true;
+    try {
+      await handleAction(card, button.dataset.action);
+    } catch (error) {
+      alert("Произошла ошибка при обновлении.");
+    } finally {
+      button.disabled = false;
+    }
+  });
+
+  loadRequests();
+</script>

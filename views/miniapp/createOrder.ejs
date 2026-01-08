@@ -1,0 +1,222 @@
+<% layout("/miniapp/layout.ejs") %>
+
+<section class="grid gap-6 animate-[fadeSlide_0.45s_ease]">
+  <section class="rounded-2xl border border-slate-200 bg-white p-5">
+    <h1 class="text-xl font-semibold text-slate-900">Новая заявка</h1>
+    <p class="mt-2 text-sm text-slate-500">Заполните данные, чтобы получить план тренировки.</p>
+  </section>
+
+  <section class="rounded-2xl border border-slate-200 bg-white p-5">
+    <form id="requestForm" class="grid gap-4">
+      <label class="grid gap-2">
+        <span class="text-xs font-semibold text-slate-500">Имя</span>
+        <input
+          id="fullName"
+          type="text"
+          maxlength="120"
+          class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:border-blue-400 focus:outline-none"
+          placeholder="Введите имя"
+          required
+        />
+      </label>
+
+      <label class="grid gap-2">
+        <span class="text-xs font-semibold text-slate-500">Номер телефона</span>
+        <input
+          id="phoneNumber"
+          type="tel"
+          inputmode="tel"
+          pattern="[0-9+()\\-\\s]{6,20}"
+          class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:border-blue-400 focus:outline-none"
+          placeholder="+7 999 123-45-67"
+          required
+        />
+      </label>
+
+      <label class="grid gap-2">
+        <span class="text-xs font-semibold text-slate-500">Возраст</span>
+        <input
+          id="age"
+          type="number"
+          min="1"
+          max="120"
+          class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:border-blue-400 focus:outline-none"
+          required
+        />
+      </label>
+
+      <label class="grid gap-2">
+        <span class="text-xs font-semibold text-slate-500">Рост (см)</span>
+        <input
+          id="heightCm"
+          type="number"
+          min="50"
+          max="250"
+          class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:border-blue-400 focus:outline-none"
+          required
+        />
+      </label>
+
+      <label class="grid gap-2">
+        <span class="text-xs font-semibold text-slate-500">Вес (кг)</span>
+        <input
+          id="weightKg"
+          type="number"
+          min="20"
+          max="300"
+          class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:border-blue-400 focus:outline-none"
+          required
+        />
+      </label>
+
+      <label class="grid gap-2">
+        <span class="text-xs font-semibold text-slate-500">Цель тренировки</span>
+        <select
+          id="goalId"
+          class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:border-blue-400 focus:outline-none"
+          required
+        >
+          <option value="" disabled selected>Загрузка целей...</option>
+        </select>
+      </label>
+
+      <label class="grid gap-2">
+        <span class="text-xs font-semibold text-slate-500">Противопоказания / болячки</span>
+        <textarea
+          id="medicalContraindications"
+          rows="4"
+          class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:border-blue-400 focus:outline-none"
+          placeholder="Опишите проблемы со здоровьем"
+        ></textarea>
+      </label>
+
+      <div id="formNotice" class="hidden rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-600"></div>
+
+      <div class="flex flex-wrap gap-2">
+        <button
+          type="submit"
+          class="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-500"
+        >
+          Отправить заявку
+        </button>
+        <a
+          id="backLink"
+          class="inline-flex items-center justify-center rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+          href="/miniapp/main"
+        >
+          Назад
+        </a>
+      </div>
+    </form>
+  </section>
+</section>
+
+<script>
+  const params = new URLSearchParams(window.location.search);
+  const telegramId = document.body.dataset.telegramId || params.get("telegramId");
+  const initData = window.Telegram?.WebApp?.initData || "";
+  const initHeaders = initData ? { "x-telegram-init-data": initData } : {};
+  const query = telegramId ? `?telegramId=${telegramId}` : "";
+  const goalSelect = document.getElementById("goalId");
+  const formNotice = document.getElementById("formNotice");
+  const backLink = document.getElementById("backLink");
+  const submitButton = document.querySelector("#requestForm button[type='submit']");
+
+  if (backLink && telegramId) {
+    backLink.href = `/miniapp/main?telegramId=${telegramId}`;
+  }
+
+  function showNotice(message) {
+    if (!formNotice) return;
+    formNotice.textContent = message;
+    formNotice.classList.remove("hidden");
+  }
+
+  function setFormDisabled(disabled, message) {
+    if (submitButton) {
+      submitButton.disabled = disabled;
+      submitButton.classList.toggle("opacity-50", disabled);
+      submitButton.classList.toggle("pointer-events-none", disabled);
+    }
+    if (disabled && message) {
+      showNotice(message);
+    }
+  }
+
+  async function loadGoals() {
+    const res = await fetch("/api/miniapp/goals");
+    if (!res.ok || !goalSelect) {
+      if (goalSelect) {
+        goalSelect.innerHTML = `<option value="">Не удалось загрузить цели</option>`;
+      }
+      return;
+    }
+    const data = await res.json();
+    const items = data.items || [];
+    if (!items.length) {
+      goalSelect.innerHTML = `<option value="">Цели не найдены</option>`;
+      return;
+    }
+    goalSelect.innerHTML = `
+      <option value="" disabled selected>Выберите цель</option>
+      ${items.map((goal) => `<option value="${goal._id}">${goal.title}</option>`).join("")}
+    `;
+  }
+
+  async function checkProfile() {
+    if (!telegramId && !initData) {
+      setFormDisabled(true, "Не указан Telegram ID.");
+      return;
+    }
+    const res = await fetch(`/api/miniapp/profile${query}`, { headers: initHeaders });
+    if (!res.ok) return;
+    const data = await res.json();
+    const user = data.user;
+    if (!user) return;
+    if (user.isAdmin) {
+      setFormDisabled(true, "Админы не подают заявки.");
+    }
+    if (user.trainingStatus === "active" || user.trainingStatus === "requested") {
+      setFormDisabled(true, "У вас уже есть активная или поданная заявка.");
+    }
+  }
+
+  document.getElementById("requestForm").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!telegramId && !initData) {
+      showNotice("Не указан Telegram ID.");
+      return;
+    }
+    if (formNotice) {
+      formNotice.classList.add("hidden");
+    }
+
+    const payload = {
+      telegramId,
+      fullName: document.getElementById("fullName").value,
+      phoneNumber: document.getElementById("phoneNumber").value,
+      age: document.getElementById("age").value,
+      heightCm: document.getElementById("heightCm").value,
+      weightKg: document.getElementById("weightKg").value,
+      goalId: document.getElementById("goalId").value,
+      medicalContraindications: document.getElementById("medicalContraindications").value,
+    };
+
+    const res = await fetch(`/api/miniapp/orders${query}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...initHeaders },
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      showNotice(data.message || "Не удалось отправить заявку.");
+      return;
+    }
+
+    window.location.href = `/miniapp/main?telegramId=${telegramId}`;
+  });
+
+  loadGoals();
+  checkProfile();
+</script>

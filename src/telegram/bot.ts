@@ -3,6 +3,7 @@ import dotenv from "dotenv";
 import type { InputMediaPhoto } from "telegraf/types";
 import User from "../common/models/User.js";
 import Broadcast from "../common/models/Broadcast.js";
+import { logAppError } from "../common/utils/logAppError.js";
 
 dotenv.config();
 
@@ -403,6 +404,7 @@ bot.action("broadcast_send", async (ctx) => {
 
 bot.catch((error) => {
 	console.log(`Bot error: ${error}`);
+	logAppError(error, { source: "telegram-bot" }).catch(() => undefined);
 });
 
 export async function startBot(): Promise<void> {

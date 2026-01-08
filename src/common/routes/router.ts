@@ -8,6 +8,8 @@ import * as XLSX from "xlsx";
 import Order from "../models/Orders.js";
 import TrainingGoal from "../models/TrainingGoal.js";
 import User from "../models/User.js";
+import AppError from "../models/AppError.js";
+import { logAppError } from "../utils/logAppError.js";
 
 const router = express.Router();
 const uploadsDir = path.resolve("public", "uploads");
@@ -46,6 +48,8 @@ type UserDoc = {
 	lastName?: string;
 	username?: string;
 	photoUrl?: string;
+	fullName?: string;
+	phoneNumber?: string;
 	isAdmin?: boolean;
 	trainingStatus?: string;
 };
@@ -153,6 +157,14 @@ function resolveAdminTelegramId(req: Request): number | null {
 		parseTelegramId(bodyValue) ??
 		parseTelegramId(envValue)
 	);
+}
+
+function withAdminContext(
+	req: Request,
+	base: { source: string; path?: string; method?: string; status?: number },
+) {
+	const adminTelegramId = resolveAdminTelegramId(req);
+	return adminTelegramId ? { ...base, adminTelegramId } : base;
 }
 
 function resolveTelegramUserId(req: Request): number | null {
@@ -436,6 +448,15 @@ router.get("/api/admin/profile", async (req: Request, res: Response) => {
 
 		res.json({ admin });
 	} catch (error) {
+		await logAppError(
+			error,
+			withAdminContext(req, {
+				source: "api",
+				path: req.path,
+				method: req.method,
+				status: 500,
+			}),
+		);
 		res.status(500).json({ message: "Failed to load profile" });
 	}
 });
@@ -452,6 +473,15 @@ router.get("/api/admin/summary", async (req: Request, res: Response) => {
 
 		res.json({ summary: { pending, accepted, goals } });
 	} catch (error) {
+		await logAppError(
+			error,
+			withAdminContext(req, {
+				source: "api",
+				path: req.path,
+				method: req.method,
+				status: 500,
+			}),
+		);
 		res.status(500).json({ message: "Failed to load summary" });
 	}
 });
@@ -470,6 +500,7 @@ router.get("/api/admin/goals", async (_req: Request, res: Response) => {
 
 		res.json({ items });
 	} catch (error) {
+		await logAppError(error, { source: "api", status: 500 });
 		res.status(500).json({ message: "Failed to load goals" });
 	}
 });
@@ -499,6 +530,12 @@ router.post("/api/admin/goals", async (req: Request, res: Response) => {
 		const created = await TrainingGoal.create({ title, isActive: true });
 		res.status(201).json({ id: created._id, title: created.title });
 	} catch (error) {
+		await logAppError(error, {
+			source: "api",
+			path: req.path,
+			method: req.method,
+			status: 500,
+		});
 		const code = (error as { code?: number } | null)?.code;
 		if (code === 11000) {
 			res.status(409).json({ message: "Goal already exists" });
@@ -527,6 +564,12 @@ router.delete("/api/admin/goals/:id", async (req: Request, res: Response) => {
 
 		res.status(204).send();
 	} catch (error) {
+		await logAppError(error, {
+			source: "api",
+			path: req.path,
+			method: req.method,
+			status: 500,
+		});
 		res.status(500).json({ message: "Failed to delete goal" });
 	}
 });
@@ -543,25 +586,37 @@ router.get("/api/admin/trainings", async (req: Request, res: Response) => {
 			.lean<OrderDoc[]>();
 		const telegramIds = orders.map((order) => order.telegramUserId);
 		const users = await User.find({ telegramId: { $in: telegramIds } })
-			.select("telegramId firstName lastName username photoUrl")
+			.select("telegramId firstName lastName username photoUrl fullName phoneNumber")
 			.lean<UserDoc[]>();
 		const userById = new Map(users.map((user) => [user.telegramId, user]));
 
-		const items = orders.map((order) => ({
+		const items = orders.map((order) => {
+			const user = userById.get(order.telegramUserId);
+			return {
 			id: order._id,
 			telegramUserId: order.telegramUserId,
-			fullName: order.fullName,
-			phoneNumber: order.phoneNumber,
+			fullName: order.fullName || user?.fullName,
+			phoneNumber: order.phoneNumber || user?.phoneNumber,
 			status: order.status,
 			trainingDate: order.trainingDate || order.createdAt,
 			goalTitle: extractGoalTitle(order.goalId),
 			attachmentUrl: order.attachmentUrl,
 			attachmentFileName: order.attachmentFileName,
-			user: userById.get(order.telegramUserId),
-		}));
+			user,
+			};
+		});
 
 		res.json({ items });
 	} catch (error) {
+		await logAppError(
+			error,
+			withAdminContext(req, {
+				source: "api",
+				path: req.path,
+				method: req.method,
+				status: 500,
+			}),
+		);
 		res.status(500).json({ message: "Failed to load trainings" });
 	}
 });
@@ -584,7 +639,7 @@ router.get("/api/admin/requests", async (_req: Request, res: Response) => {
 			);
 		}
 		const users = await User.find({ telegramId: { $in: telegramIds } })
-			.select("telegramId firstName lastName username photoUrl")
+			.select("telegramId firstName lastName username photoUrl fullName phoneNumber")
 			.lean<UserDoc[]>();
 		const userById = new Map(users.map((user) => [user.telegramId, user]));
 
@@ -592,8 +647,8 @@ router.get("/api/admin/requests", async (_req: Request, res: Response) => {
 			const user = userById.get(order.telegramUserId);
 			return {
 				id: order._id,
-				fullName: order.fullName,
-				phoneNumber: order.phoneNumber,
+				fullName: order.fullName || user?.fullName,
+				phoneNumber: order.phoneNumber || user?.phoneNumber,
 				telegramUserId: order.telegramUserId,
 				age: order.age,
 				weightKg: order.weightKg,
@@ -609,6 +664,7 @@ router.get("/api/admin/requests", async (_req: Request, res: Response) => {
 
 		res.json({ items });
 	} catch (error) {
+		await logAppError(error, { source: "api", status: 500 });
 		res.status(500).json({ message: "Failed to load requests" });
 	}
 });
@@ -679,6 +735,15 @@ router.post("/api/admin/requests/:id/accept", async (req: Request, res: Response
 
 		res.json({ status: "accepted" });
 	} catch (error) {
+		await logAppError(
+			error,
+			withAdminContext(req, {
+				source: "api",
+				path: req.path,
+				method: req.method,
+				status: 500,
+			}),
+		);
 		const message =
 			error instanceof Error && error.message === "Attachment too large"
 				? "Attachment too large"
@@ -717,6 +782,15 @@ router.post("/api/admin/requests/:id/decline", async (req: Request, res: Respons
 
 		res.json({ status: "declined" });
 	} catch (error) {
+		await logAppError(
+			error,
+			withAdminContext(req, {
+				source: "api",
+				path: req.path,
+				method: req.method,
+				status: 500,
+			}),
+		);
 		res.status(500).json({ message: "Failed to decline request" });
 	}
 });
@@ -751,6 +825,15 @@ router.post("/api/admin/trainings/:id/complete", async (req: Request, res: Respo
 
 		res.json({ status: "completed" });
 	} catch (error) {
+		await logAppError(
+			error,
+			withAdminContext(req, {
+				source: "api",
+				path: req.path,
+				method: req.method,
+				status: 500,
+			}),
+		);
 		res.status(500).json({ message: "Failed to complete training" });
 	}
 });
@@ -805,6 +888,15 @@ router.post("/api/admin/trainings/:id/delete", async (req: Request, res: Respons
 
 		res.json({ status: "deleted" });
 	} catch (error) {
+		await logAppError(
+			error,
+			withAdminContext(req, {
+				source: "api",
+				path: req.path,
+				method: req.method,
+				status: 500,
+			}),
+		);
 		res.status(500).json({ message: "Failed to delete training" });
 	}
 });
@@ -824,6 +916,15 @@ router.get("/admin/trainings/:id/file", async (req: Request, res: Response) => {
 			...viewData,
 		});
 	} catch (error) {
+		await logAppError(
+			error,
+			withAdminContext(req, {
+				source: "admin-view",
+				path: req.path,
+				method: req.method,
+				status: 500,
+			}),
+		);
 		res.status(500).render("admin/training-file", {
 			activePage: "",
 			adminTelegramId: resolveAdminTelegramId(req),
@@ -856,6 +957,7 @@ router.get("/api/admin/users", async (_req: Request, res: Response) => {
 
 		res.json({ items });
 	} catch (error) {
+		await logAppError(error, { source: "api", status: 500 });
 		res.status(500).json({ message: "Failed to load users" });
 	}
 });
@@ -896,6 +998,12 @@ router.get("/miniapp/trainings/:id/file", async (req: Request, res: Response) =>
 			...viewData,
 		});
 	} catch (error) {
+		await logAppError(error, {
+			source: "miniapp-view",
+			path: req.path,
+			method: req.method,
+			status: 500,
+		});
 		res.status(500).render("miniapp/training-file", {
 			telegramId: resolveTelegramUserId(req),
 			error: "Не удалось открыть файл.",
@@ -937,6 +1045,12 @@ router.get("/api/miniapp/profile", async (req: Request, res: Response) => {
 			},
 		});
 	} catch (error) {
+		await logAppError(error, {
+			source: "api",
+			path: req.path,
+			method: req.method,
+			status: 500,
+		});
 		res.status(500).json({ message: "Failed to load profile" });
 	}
 });
@@ -950,6 +1064,7 @@ router.get("/api/miniapp/goals", async (_req: Request, res: Response) => {
 
 		res.json({ items: goals });
 	} catch (error) {
+		await logAppError(error, { source: "api", status: 500 });
 		res.status(500).json({ message: "Failed to load goals" });
 	}
 });
@@ -991,6 +1106,12 @@ router.get("/api/miniapp/orders", async (req: Request, res: Response) => {
 			isAdmin: Boolean(user.isAdmin),
 		});
 	} catch (error) {
+		await logAppError(error, {
+			source: "api",
+			path: req.path,
+			method: req.method,
+			status: 500,
+		});
 		res.status(500).json({ message: "Failed to load orders" });
 	}
 });
@@ -1131,12 +1252,49 @@ router.post("/api/miniapp/orders", async (req: Request, res: Response) => {
 
 		await User.updateOne(
 			{ telegramId },
-			{ $set: { trainingStatus: "requested" } },
+			{
+				$set: {
+					trainingStatus: "requested",
+					fullName,
+					phoneNumber,
+				},
+			},
 		);
 
 		res.status(201).json({ id: order._id.toString() });
 	} catch (error) {
+		await logAppError(error, {
+			source: "api",
+			path: req.path,
+			method: req.method,
+			status: 500,
+		});
 		res.status(500).json({ message: "Failed to create order" });
+	}
+});
+
+router.get("/admin/errors", (req: Request, res: Response) => {
+	res.render("admin/errors", {
+		activePage: "errors",
+		adminTelegramId: resolveAdminTelegramId(req),
+	});
+});
+
+router.get("/api/admin/errors", async (req: Request, res: Response) => {
+	try {
+		const items = await AppError.find()
+			.sort({ createdAt: -1 })
+			.limit(100)
+			.lean();
+		res.json({ items });
+	} catch (error) {
+		await logAppError(error, {
+			source: "api",
+			path: req.path,
+			method: req.method,
+			status: 500,
+		});
+		res.status(500).json({ message: "Failed to load errors" });
 	}
 });
 

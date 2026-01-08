@@ -12,6 +12,8 @@ const userSchema = new Schema(
 		lastName: { type: String, trim: true },
 		username: { type: String, trim: true },
 		languageCode: { type: String, trim: true },
+		fullName: { type: String, trim: true },
+		phoneNumber: { type: String, trim: true },
 		photoFileId: { type: String },
 		photoUniqueId: { type: String },
 		photoUrl: { type: String },

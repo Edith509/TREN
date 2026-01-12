@@ -14,28 +14,52 @@
   </section>
 
   <section class="rounded-2xl border border-slate-200 bg-white p-5" id="requestBlock">
-    <div class="grid gap-3">
-      <div class="flex items-center justify-around">
-        <div class="text-sm font-semibold text-slate-900">Новая заявка</div>
-        <div class="text-xs text-slate-500">Оформите тренировочный план</div>
+    <div class="grid gap-4">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <div class="text-sm font-semibold text-slate-900">Новые заявки</div>
+        <div class="text-xs text-slate-500">Тренировки и питание</div>
       </div>
-      <div class="flex">
+      <div class="flex flex-wrap gap-3">
         <a
-        id="requestButton"
-        class="inline-flex items-center mx-auto justify-center rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-blue-500"
-        href="/miniapp/request"
-      >
-        Подать заявку
-      </a>
+          id="requestTrainingButton"
+          class="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-blue-500"
+          href="/miniapp/request"
+        >
+          Заявка на тренировку
+        </a>
+        <a
+          id="requestNutritionButton"
+          class="inline-flex items-center justify-center rounded-lg border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
+          href="/miniapp/nutrition/request"
+        >
+          Заявка на питание
+        </a>
       </div>
     </div>
     <div id="requestNotice" class="mt-3 hidden text-xs text-rose-600"></div>
+    <div id="nutritionNotice" class="mt-2 hidden text-xs text-rose-600"></div>
   </section>
 
   <section class="rounded-2xl border border-slate-200 bg-white p-5">
-    <div class="flex items-center justify-between">
+    <div class="flex items-center justify-between gap-3">
       <div class="text-sm font-semibold text-slate-900">Мои заявки</div>
       <div class="text-xs text-slate-500" id="ordersCount">0</div>
+    </div>
+    <div class="mt-4 flex flex-wrap gap-2">
+      <button
+        class="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700"
+        type="button"
+        id="tabTraining"
+      >
+        Тренировки
+      </button>
+      <button
+        class="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-500"
+        type="button"
+        id="tabNutrition"
+      >
+        Питание
+      </button>
     </div>
     <div class="mt-4 grid gap-3" id="ordersList">
       <div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-5 text-center text-sm text-slate-500">
@@ -51,6 +75,9 @@
   const initData = window.Telegram?.WebApp?.initData || "";
   const initHeaders = initData ? { "x-telegram-init-data": initData } : {};
   const query = telegramId ? `?telegramId=${telegramId}` : "";
+  const tabTraining = document.getElementById("tabTraining");
+  const tabNutrition = document.getElementById("tabNutrition");
+  let activeTab = "training";
 
   const statusLabels = {
     pending: "Подано",
@@ -82,9 +109,35 @@
     return `${first}${last}`.trim() || "?";
   }
 
+  function renderAvatarImage(photoUrl, telegramId, initials, altText) {
+    const fallbackSrc = telegramId ? `/api/telegram/avatar/${telegramId}` : "";
+    const src = photoUrl || fallbackSrc;
+    if (!src) return initials;
+    const fallbackAttr = fallbackSrc && src !== fallbackSrc ? ` data-fallback="${fallbackSrc}"` : "";
+    const onError = "if (this.dataset.fallback){this.src=this.dataset.fallback;this.removeAttribute('data-fallback');}else{this.remove();}";
+    const img = `<img class="absolute inset-0 h-full w-full object-cover" src="${src}" alt="${altText}" onerror="${onError}"${fallbackAttr} />`;
+    return `${initials}${img}`;
+  }
+
   function setRequestButtonState(canRequest, message) {
-    const button = document.getElementById("requestButton");
+    const button = document.getElementById("requestTrainingButton");
     const notice = document.getElementById("requestNotice");
+    if (!button || !notice) return;
+
+    if (canRequest) {
+      button.classList.remove("opacity-50", "pointer-events-none");
+      notice.classList.add("hidden");
+      notice.textContent = "";
+    } else {
+      button.classList.add("opacity-50", "pointer-events-none");
+      notice.textContent = message || "У вас уже есть активная или поданная заявка.";
+      notice.classList.remove("hidden");
+    }
+  }
+
+  function setNutritionButtonState(canRequest, message) {
+    const button = document.getElementById("requestNutritionButton");
+    const notice = document.getElementById("nutritionNotice");
     if (!button || !notice) return;
 
     if (canRequest) {
@@ -101,11 +154,13 @@
   async function loadProfile() {
     if (!telegramId && !initData) {
       setRequestButtonState(false, "Не указан Telegram ID.");
+      setNutritionButtonState(false, "Не указан Telegram ID.");
       return;
     }
     const res = await fetch(`/api/miniapp/profile${query}`, { headers: initHeaders });
     if (!res.ok) {
       setRequestButtonState(false, "Не удалось загрузить профиль.");
+      setNutritionButtonState(false, "Не удалось загрузить профиль.");
       return;
     }
     const data = await res.json();
@@ -113,12 +168,10 @@
     const profileCard = document.getElementById("profileCard");
 
     if (profileCard) {
-      const avatar = user.photoUrl
-        ? `<img class="h-full w-full object-cover" src="${user.photoUrl}" alt="Фото профиля" />`
-        : getInitials(user);
+      const avatar = renderAvatarImage(user.photoUrl, user.telegramId, getInitials(user), "Фото профиля");
       profileCard.innerHTML = `
         <div class="flex items-center gap-4">
-          <div class="flex h-14 w-14 items-center justify-center overflow-hidden rounded-xl bg-slate-100 text-lg font-semibold text-slate-500">
+          <div class="relative flex h-14 w-14 items-center justify-center overflow-hidden rounded-xl bg-slate-100 text-lg font-semibold text-slate-500">
             ${avatar}
           </div>
           <div>
@@ -131,61 +184,21 @@
 
     if (user.isAdmin) {
       setRequestButtonState(false, "Админы не подают заявки.");
+      setNutritionButtonState(false, "Админы не подают заявки.");
       return;
     }
 
     const hasOpenRequest =
       user.trainingStatus === "active" || user.trainingStatus === "requested";
     setRequestButtonState(!hasOpenRequest);
+
+    const hasNutritionRequest =
+      user.nutritionStatus === "active" || user.nutritionStatus === "requested";
+    setNutritionButtonState(!hasNutritionRequest);
   }
 
-  async function loadOrders() {
-    const listEl = document.getElementById("ordersList");
-    const countEl = document.getElementById("ordersCount");
-    if (!telegramId && !initData) {
-      if (countEl) {
-        countEl.textContent = "0";
-      }
-      if (listEl) {
-        listEl.innerHTML = `
-          <div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-5 text-center text-sm text-slate-500">
-            Не указан Telegram ID.
-          </div>
-        `;
-      }
-      return;
-    }
-    const res = await fetch(`/api/miniapp/orders${query}`, { headers: initHeaders });
-
-    if (!res.ok) {
-      if (listEl) {
-        listEl.innerHTML = `
-          <div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-5 text-center text-sm text-slate-500">
-            Не удалось загрузить заявки.
-          </div>
-        `;
-      }
-      return;
-    }
-
-    const data = await res.json();
-    const items = data.items || [];
-
-    if (countEl) {
-      countEl.textContent = `${items.length}`;
-    }
-
-    if (!listEl) return;
-    if (!items.length) {
-      listEl.innerHTML = `
-        <div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-5 text-center text-sm text-slate-500">
-          Пока нет заявок.
-        </div>
-      `;
-      return;
-    }
-
-    listEl.innerHTML = items
+  function renderTrainingOrders(items) {
+    return items
       .map((item) => {
         const statusClass = statusClasses[item.status] || statusClasses.pending;
         const fileLinks = item.attachmentUrl
@@ -229,12 +242,144 @@
       .join("");
   }
 
+  function renderNutritionOrders(items) {
+    return items
+      .map((item) => {
+        const statusClass = statusClasses[item.status] || statusClasses.pending;
+        const fileLinks = item.attachmentUrl
+          ? `
+              <div class="mt-2 flex flex-wrap gap-2">
+                <a class="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50" href="${item.attachmentUrl}" download>
+                  <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                    <path d="M10 2a.75.75 0 0 1 .75.75v7.69l2.22-2.22a.75.75 0 1 1 1.06 1.06l-3.5 3.5a.75.75 0 0 1-1.06 0l-3.5-3.5a.75.75 0 1 1 1.06-1.06l2.22 2.22V2.75A.75.75 0 0 1 10 2z" />
+                    <path d="M4 13.25A.75.75 0 0 1 4.75 12.5h10.5a.75.75 0 0 1 .75.75v2.5A2.25 2.25 0 0 1 13.75 18h-7.5A2.25 2.25 0 0 1 4 15.75v-2.5z" />
+                  </svg>
+                  Скачать
+                </a>
+                <a class="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-blue-700 transition hover:bg-blue-50" href="/miniapp/nutrition/${item.id}/file${query}">
+                  <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                    <path d="M4.75 3A1.75 1.75 0 0 0 3 4.75v10.5A1.75 1.75 0 0 0 4.75 17h10.5A1.75 1.75 0 0 0 17 15.25V8.5a.75.75 0 0 0-.22-.53l-3.75-3.75A.75.75 0 0 0 12.5 4H4.75zM12 5.5V8h2.5L12 5.5zM6 10.25c0-.414.336-.75.75-.75h6.5a.75.75 0 0 1 0 1.5h-6.5A.75.75 0 0 1 6 10.25zm0 3c0-.414.336-.75.75-.75h6.5a.75.75 0 0 1 0 1.5h-6.5A.75.75 0 0 1 6 13.25z" />
+                  </svg>
+                  Открыть
+                </a>
+              </div>
+            `
+          : "";
+
+        const goalLabel =
+          item.nutritionGoal === "loss"
+            ? "Похудение"
+            : item.nutritionGoal === "mass"
+              ? "Набор массы"
+              : item.nutritionGoal === "quality"
+                ? "Качество тела"
+                : "Не указана";
+
+        return `
+          <div class="rounded-xl border border-slate-200 bg-white px-4 py-4">
+            <div class="flex items-center justify-between gap-2">
+              <div class="text-sm font-medium text-slate-900">${formatDate(item.createdAt)}</div>
+              <span class="inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${statusClass}">
+                ${statusLabels[item.status] || "Статус"}
+              </span>
+            </div>
+            <div class="mt-2 text-sm text-slate-500">
+              <div class="flex items-center justify-between">
+                <span>Цель питания</span>
+                <span class="font-medium text-slate-900">${goalLabel}</span>
+              </div>
+            </div>
+            ${fileLinks}
+          </div>
+        `;
+      })
+      .join("");
+  }
+
+  async function loadOrders() {
+    const listEl = document.getElementById("ordersList");
+    const countEl = document.getElementById("ordersCount");
+    if (!telegramId && !initData) {
+      if (countEl) {
+        countEl.textContent = "0";
+      }
+      if (listEl) {
+        listEl.innerHTML = `
+          <div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-5 text-center text-sm text-slate-500">
+            Не указан Telegram ID.
+          </div>
+        `;
+      }
+      return;
+    }
+    const endpoint =
+      activeTab === "nutrition" ? "/api/miniapp/nutrition/orders" : "/api/miniapp/orders";
+    const res = await fetch(`${endpoint}${query}`, { headers: initHeaders });
+
+    if (!res.ok) {
+      if (listEl) {
+        listEl.innerHTML = `
+          <div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-5 text-center text-sm text-slate-500">
+            Не удалось загрузить заявки.
+          </div>
+        `;
+      }
+      return;
+    }
+
+    const data = await res.json();
+    const items = data.items || [];
+
+    if (countEl) {
+      countEl.textContent = `${items.length}`;
+    }
+
+    if (!listEl) return;
+    if (!items.length) {
+      listEl.innerHTML = `
+        <div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-5 text-center text-sm text-slate-500">
+          Пока нет заявок.
+        </div>
+      `;
+      return;
+    }
+
+    listEl.innerHTML =
+      activeTab === "nutrition" ? renderNutritionOrders(items) : renderTrainingOrders(items);
+  }
+
   if (telegramId) {
-    const requestButton = document.getElementById("requestButton");
-    if (requestButton) {
-      requestButton.href = `/miniapp/request?telegramId=${telegramId}`;
+    const requestTrainingButton = document.getElementById("requestTrainingButton");
+    const requestNutritionButton = document.getElementById("requestNutritionButton");
+    if (requestTrainingButton) {
+      requestTrainingButton.href = `/miniapp/request?telegramId=${telegramId}`;
+    }
+    if (requestNutritionButton) {
+      requestNutritionButton.href = `/miniapp/nutrition/request?telegramId=${telegramId}`;
     }
   }
+
+  function setActiveTab(nextTab) {
+    activeTab = nextTab;
+    if (tabTraining && tabNutrition) {
+      const isTraining = nextTab === "training";
+      tabTraining.classList.toggle("border-blue-200", isTraining);
+      tabTraining.classList.toggle("bg-blue-50", isTraining);
+      tabTraining.classList.toggle("text-blue-700", isTraining);
+      tabTraining.classList.toggle("border-slate-200", !isTraining);
+      tabTraining.classList.toggle("text-slate-500", !isTraining);
+
+      tabNutrition.classList.toggle("border-blue-200", !isTraining);
+      tabNutrition.classList.toggle("bg-blue-50", !isTraining);
+      tabNutrition.classList.toggle("text-blue-700", !isTraining);
+      tabNutrition.classList.toggle("border-slate-200", isTraining);
+      tabNutrition.classList.toggle("text-slate-500", isTraining);
+    }
+    loadOrders();
+  }
+
+  tabTraining?.addEventListener("click", () => setActiveTab("training"));
+  tabNutrition?.addEventListener("click", () => setActiveTab("nutrition"));
 
   loadProfile();
   loadOrders();

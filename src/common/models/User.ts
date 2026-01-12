@@ -23,6 +23,11 @@ const userSchema = new Schema(
 			enum: ["none", "requested", "active", "completed", "declined"],
 			default: "none",
 		},
+		nutritionStatus: {
+			type: String,
+			enum: ["none", "requested", "active", "completed", "declined"],
+			default: "none",
+		},
 		lastSeenAt: { type: Date },
 	},
 	{ timestamps: true, versionKey: false },

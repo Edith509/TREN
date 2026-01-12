@@ -40,10 +40,24 @@
             KT
           </div>
           <div class="leading-tight">
-            <div class="text-sm font-semibold">KlimTrener</div>
-            <div class="text-xs text-slate-500">Тренировки</div>
+            <div class="text-sm font-semibold text-slate-900">KlimTrener</div>
+            <div class="text-xs text-slate-500"><%= headerSubtitle || "Тренировки" %></div>
           </div>
         </div>
+        <a
+          class="inline-flex items-center justify-center rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
+          href="/miniapp/courses"
+        >
+          Курсы
+        </a>
+        <% if (typeof showHomeButton !== "undefined" && showHomeButton) { %>
+          <a
+            class="inline-flex items-center justify-center rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
+            href="/miniapp/main"
+          >
+            Главная
+          </a>
+        <% } %>
       </div>
     </header>
 

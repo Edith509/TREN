@@ -9,7 +9,7 @@
   <section class="grid gap-6 md:grid-cols-[1.1fr_1fr]">
     <div class="rounded-2xl border border-slate-200 bg-white p-6" id="adminProfile">
       <div class="flex items-center gap-4">
-        <div class="flex h-14 w-14 items-center justify-center rounded-xl bg-slate-100 text-lg font-semibold text-slate-500">
+        <div class="relative flex h-14 w-14 items-center justify-center rounded-xl bg-slate-100 text-lg font-semibold text-slate-500">
           ?
         </div>
         <div>
@@ -39,10 +39,33 @@
   </section>
 
   <section class="rounded-2xl border border-slate-200 bg-white p-6">
-    <h3 class="text-base font-semibold text-slate-900">Ближайшие тренировки</h3>
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <h3 class="text-base font-semibold text-slate-900">Принятые планы</h3>
+      <div class="flex flex-wrap gap-2">
+        <button
+          id="tabTrainingPlans"
+          class="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700"
+          type="button"
+        >
+          Тренировки
+        </button>
+        <button
+          id="tabNutritionPlans"
+          class="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-500"
+          type="button"
+        >
+          Питание
+        </button>
+      </div>
+    </div>
     <div class="mt-4 grid gap-3" id="trainingList">
       <div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-5 text-center text-sm text-slate-500">
         Загружаем тренировки...
+      </div>
+    </div>
+    <div class="mt-4 hidden grid gap-3" id="nutritionList">
+      <div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-5 text-center text-sm text-slate-500">
+        Загружаем планы питания...
       </div>
     </div>
   </section>
@@ -86,6 +109,16 @@
     return `${first}${last}`.trim() || "?";
   }
 
+  function renderAvatarImage(photoUrl, telegramId, initials, altText) {
+    const fallbackSrc = telegramId ? `/api/telegram/avatar/${telegramId}` : "";
+    const src = photoUrl || fallbackSrc;
+    if (!src) return initials;
+    const fallbackAttr = fallbackSrc && src !== fallbackSrc ? ` data-fallback="${fallbackSrc}"` : "";
+    const onError = "if (this.dataset.fallback){this.src=this.dataset.fallback;this.removeAttribute('data-fallback');}else{this.remove();}";
+    const img = `<img class="absolute inset-0 h-full w-full object-cover" src="${src}" alt="${altText}" onerror="${onError}"${fallbackAttr} />`;
+    return `${initials}${img}`;
+  }
+
   function getDisplayName(item) {
     if (item.fullName) return item.fullName;
     const first = item.user?.firstName || "";
@@ -102,13 +135,11 @@
     if (!admin) return;
 
     const profileEl = document.getElementById("adminProfile");
-    const avatar = admin.photoUrl
-      ? `<img class="h-full w-full object-cover" src="${admin.photoUrl}" alt="Фото профиля" />`
-      : getInitials(admin);
+    const avatar = renderAvatarImage(admin.photoUrl, admin.telegramId, getInitials(admin), "Фото профиля");
 
     profileEl.innerHTML = `
       <div class="flex items-center gap-4">
-        <div class="flex h-14 w-14 items-center justify-center overflow-hidden rounded-xl bg-slate-100 text-lg font-semibold text-slate-500">
+        <div class="relative flex h-14 w-14 items-center justify-center overflow-hidden rounded-xl bg-slate-100 text-lg font-semibold text-slate-500">
           ${avatar}
         </div>
         <div>
@@ -129,12 +160,20 @@
     const summaryEl = document.getElementById("summaryStats");
     summaryEl.innerHTML = `
       <div class="flex items-center justify-between py-2 text-slate-500">
-        <span>Заявок на рассмотрении</span>
-        <span class="font-semibold text-slate-900">${summary.pending || 0}</span>
+        <span>Заявки на тренировки</span>
+        <span class="font-semibold text-slate-900">${summary.pendingTraining || 0}</span>
       </div>
       <div class="flex items-center justify-between py-2 text-slate-500">
         <span>Принятых тренировок</span>
         <span class="font-semibold text-slate-900">${summary.accepted || 0}</span>
+      </div>
+      <div class="flex items-center justify-between py-2 text-slate-500">
+        <span>Заявки на питание</span>
+        <span class="font-semibold text-slate-900">${summary.pendingNutrition || 0}</span>
+      </div>
+      <div class="flex items-center justify-between py-2 text-slate-500">
+        <span>Принятых планов питания</span>
+        <span class="font-semibold text-slate-900">${summary.nutritionAccepted || 0}</span>
       </div>
       <div class="flex items-center justify-between py-2 text-slate-500">
         <span>Активных целей</span>
@@ -194,7 +233,7 @@
         return `
           <div class="rounded-xl border border-slate-200 bg-white px-4 py-4">
             <div class="flex items-center justify-between gap-3">
-              <div class="text-sm font-medium text-slate-900">${formatDate(item.trainingDate)}</div>
+              <div class="text-sm font-semibold text-slate-900">Тренировка</div>
               <span class="inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${statusClass}">
                 ${statusLabels[item.status] || "Статус"}
               </span>
@@ -207,12 +246,8 @@
               <div class="flex items-center justify-between gap-3">
                 <span>Пользователь</span>
                 <span class="flex items-center gap-2 text-right">
-                  <span class="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full bg-slate-100 text-[10px] font-semibold text-slate-500">
-                    ${
-                      item.user?.photoUrl
-                        ? `<img class="h-full w-full object-cover" src="${item.user.photoUrl}" alt="Фото" />`
-                        : getInitials(item.user)
-                    }
+                  <span class="relative flex h-7 w-7 items-center justify-center overflow-hidden rounded-full bg-slate-100 text-[10px] font-semibold text-slate-500">
+                    ${renderAvatarImage(item.user?.photoUrl, item.user?.telegramId, getInitials(item.user), "Фото")}
                   </span>
                   <span class="font-medium text-slate-900">${getDisplayName(item)}</span>
                 </span>
@@ -238,6 +273,130 @@
   loadProfile();
   loadSummary();
   loadTrainings();
+
+  async function loadNutritionPlans() {
+    const res = await fetch(`/api/admin/nutrition/plans${query}`, { headers: initHeaders });
+    const listEl = document.getElementById("nutritionList");
+    if (!res.ok) {
+      listEl.innerHTML = `
+        <div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-5 text-center text-sm text-slate-500">
+          Не удалось загрузить планы питания.
+        </div>
+      `;
+      return;
+    }
+    const data = await res.json();
+    const items = data.items || [];
+    if (!items.length) {
+      listEl.innerHTML = `
+        <div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-5 text-center text-sm text-slate-500">
+          Пока нет принятых планов питания.
+        </div>
+      `;
+      return;
+    }
+
+    listEl.innerHTML = items
+      .map((item) => {
+        const statusClass = statusClasses[item.status] || statusClasses.pending;
+        const fileLinks = item.attachmentUrl
+          ? `
+              <div class="mt-2 flex flex-wrap gap-2">
+                <a class="inline-flex items-center justify-center rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50" href="${item.attachmentUrl}" download>
+                  Скачать
+                </a>
+                <a class="inline-flex items-center justify-center rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-blue-700 transition hover:bg-blue-50" href="/admin/nutrition/${item.id}/file">
+                  Открыть
+                </a>
+              </div>
+            `
+          : "";
+
+        const completeButton =
+          item.status === "accepted"
+            ? `<button class="mt-2 inline-flex items-center justify-center rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50" data-action="nutrition-complete" data-order-id="${item.id}">
+                Завершить
+              </button>`
+            : "";
+
+        const deleteButton = `<button class="mt-2 inline-flex items-center justify-center rounded-lg border border-rose-200 px-3 py-2 text-xs font-semibold text-rose-600 transition hover:bg-rose-50" data-action="nutrition-delete" data-order-id="${item.id}">
+                Удалить
+              </button>`;
+
+        const goalLabel =
+          item.nutritionGoal === "loss"
+            ? "Похудение"
+            : item.nutritionGoal === "mass"
+              ? "Набор массы"
+              : item.nutritionGoal === "quality"
+                ? "Качество тела"
+                : "Не указана";
+
+        return `
+          <div class="rounded-xl border border-slate-200 bg-white px-4 py-4">
+            <div class="flex items-center justify-between gap-3">
+              <div class="text-sm font-semibold text-slate-900">Питание</div>
+              <span class="inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${statusClass}">
+                ${statusLabels[item.status] || "Статус"}
+              </span>
+            </div>
+            <div class="mt-3 grid gap-2 text-sm text-slate-500">
+              <div class="flex items-center justify-between">
+                <span>Цель</span>
+                <span class="font-medium text-slate-900">${goalLabel}</span>
+              </div>
+              <div class="flex items-center justify-between gap-3">
+                <span>Пользователь</span>
+                <span class="flex items-center gap-2 text-right">
+                  <span class="relative flex h-7 w-7 items-center justify-center overflow-hidden rounded-full bg-slate-100 text-[10px] font-semibold text-slate-500">
+                    ${renderAvatarImage(item.user?.photoUrl, item.user?.telegramId, getInitials(item.user), "Фото")}
+                  </span>
+                  <span class="font-medium text-slate-900">${getDisplayName(item)}</span>
+                </span>
+              </div>
+              <div class="flex items-center justify-between">
+                <span>Telegram ID</span>
+                <span class="font-medium text-slate-900">tg:${item.telegramUserId}</span>
+              </div>
+              <div class="flex items-center justify-between">
+                <span>Телефон</span>
+                <span class="font-medium text-slate-900">${item.phoneNumber || "не указан"}</span>
+              </div>
+              ${fileLinks}
+              ${completeButton}
+              ${deleteButton}
+            </div>
+          </div>
+        `;
+      })
+      .join("");
+  }
+
+  loadNutritionPlans();
+
+  const tabTrainingPlans = document.getElementById("tabTrainingPlans");
+  const tabNutritionPlans = document.getElementById("tabNutritionPlans");
+
+  function setActivePlansTab(tab) {
+    const isTraining = tab === "training";
+    document.getElementById("trainingList").classList.toggle("hidden", !isTraining);
+    document.getElementById("nutritionList").classList.toggle("hidden", isTraining);
+
+    tabTrainingPlans.classList.toggle("border-blue-200", isTraining);
+    tabTrainingPlans.classList.toggle("bg-blue-50", isTraining);
+    tabTrainingPlans.classList.toggle("text-blue-700", isTraining);
+    tabTrainingPlans.classList.toggle("border-slate-200", !isTraining);
+    tabTrainingPlans.classList.toggle("text-slate-500", !isTraining);
+
+    tabNutritionPlans.classList.toggle("border-blue-200", !isTraining);
+    tabNutritionPlans.classList.toggle("bg-blue-50", !isTraining);
+    tabNutritionPlans.classList.toggle("text-blue-700", !isTraining);
+    tabNutritionPlans.classList.toggle("border-slate-200", isTraining);
+    tabNutritionPlans.classList.toggle("text-slate-500", isTraining);
+  }
+
+  tabTrainingPlans.addEventListener("click", () => setActivePlansTab("training"));
+  tabNutritionPlans.addEventListener("click", () => setActivePlansTab("nutrition"));
 
   document.getElementById("trainingList").addEventListener("click", async (event) => {
     const button = event.target.closest("button[data-action]");
@@ -267,6 +426,36 @@
     } else {
       button.disabled = false;
       alert(action === "delete" ? "Не удалось удалить тренировку." : "Не удалось завершить тренировку.");
+    }
+  });
+
+  document.getElementById("nutritionList").addEventListener("click", async (event) => {
+    const button = event.target.closest("button[data-action]");
+    if (!button) return;
+    const action = button.dataset.action;
+    const orderId = button.dataset.orderId;
+    if (!orderId) return;
+
+    if (action === "nutrition-delete") {
+      const confirmed = window.confirm("Удалить план питания?");
+      if (!confirmed) return;
+    }
+
+    button.disabled = true;
+    const endpoint =
+      action === "nutrition-delete"
+        ? `/api/admin/nutrition/plans/${orderId}/delete${query}`
+        : `/api/admin/nutrition/plans/${orderId}/complete${query}`;
+    const res = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...initHeaders },
+      body: JSON.stringify({ adminTelegramId: adminId ? Number(adminId) : undefined }),
+    });
+    if (res.ok) {
+      loadNutritionPlans();
+    } else {
+      button.disabled = false;
+      alert(action === "nutrition-delete" ? "Не удалось удалить план питания." : "Не удалось завершить план питания.");
     }
   });
 </script>

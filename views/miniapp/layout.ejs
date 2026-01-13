@@ -41,7 +41,9 @@
           </div>
           <div class="leading-tight">
             <div class="text-sm font-semibold text-slate-900">KlimTrener</div>
-            <div class="text-xs text-slate-500"><%= headerSubtitle || "Тренировки" %></div>
+            <div class="text-xs text-slate-500">
+              <%= typeof headerSubtitle !== "undefined" && headerSubtitle ? headerSubtitle : "Тренировки" %>
+            </div>
           </div>
         </div>
         <a

@@ -7,6 +7,10 @@ import TrainingGoal from "../models/TrainingGoal.js";
 import User from "../models/User.js";
 import { logAppError } from "../utils/logAppError.js";
 import {
+	resolveTelegramChatId,
+	sendTelegramMessage,
+} from "../utils/telegram.js";
+import {
 	buildTrainingFileViewData,
 	extractGoalTitle,
 	resolveTelegramUserId,
@@ -17,10 +21,36 @@ import {
 
 const router = express.Router();
 
+async function notifyAdmins(message: string): Promise<void> {
+	const admins = await User.find({ isAdmin: true })
+		.select("telegramId chatId")
+		.lean<{ telegramId?: number; chatId?: number }[]>();
+	if (!admins.length) return;
+
+	const results = await Promise.allSettled(
+		admins.map((admin) => {
+			const chatId = resolveTelegramChatId(admin);
+			if (!chatId) return Promise.resolve();
+			return sendTelegramMessage(chatId, message);
+		}),
+	);
+
+	for (const result of results) {
+		if (result.status === "rejected") {
+			await logAppError(result.reason, {
+				source: "telegram-notify",
+				path: "/api/miniapp",
+				method: "POST",
+			});
+		}
+	}
+}
+
 router.get("/miniapp/main", (req: Request, res: Response) => {
 	res.render("miniapp/main", {
 		telegramId: resolveTelegramUserId(req),
 		headerSubtitle: "Тренировки",
+		ordersButtonLabel: "Заявки",
 	});
 });
 
@@ -38,12 +68,17 @@ router.get("/miniapp/nutrition/request", (req: Request, res: Response) => {
 	});
 });
 
-router.get("/miniapp/courses", (req: Request, res: Response) => {
-	res.render("miniapp/courses", {
+router.get("/miniapp/orders", (req: Request, res: Response) => {
+	res.render("miniapp/orders", {
 		telegramId: resolveTelegramUserId(req),
-		headerSubtitle: "Курсы",
+		headerSubtitle: "Заявки",
 		showHomeButton: true,
+		showOrdersButton: false,
 	});
+});
+
+router.get("/miniapp/courses", (_req: Request, res: Response) => {
+	res.redirect("/miniapp/orders");
 });
 
 router.get("/miniapp/trainings/:id/file", async (req: Request, res: Response) => {
@@ -264,7 +299,7 @@ router.post("/api/miniapp/orders", async (req: Request, res: Response) => {
 		}
 
 		const user = await User.findOne({ telegramId })
-			.select("isAdmin trainingStatus")
+			.select("isAdmin trainingStatus username")
 			.lean<UserDoc | null>();
 
 		if (!user) {
@@ -392,6 +427,11 @@ router.post("/api/miniapp/orders", async (req: Request, res: Response) => {
 			},
 		);
 
+		const userLabel = user?.username ? `@${user.username}` : `tg:${telegramId}`;
+		await notifyAdmins(
+			`Новая заявка на тренировку.\nИмя: ${fullName}\nТелефон: ${phoneNumber}\nПользователь: ${userLabel}`,
+		);
+
 		res.status(201).json({ id: order._id.toString() });
 	} catch (error) {
 		await logAppError(error, {
@@ -459,7 +499,7 @@ router.post("/api/miniapp/nutrition/orders", async (req: Request, res: Response)
 		}
 
 		const user = await User.findOne({ telegramId })
-			.select("isAdmin nutritionStatus")
+			.select("isAdmin nutritionStatus username")
 			.lean<UserDoc | null>();
 
 		if (!user) {
@@ -582,6 +622,11 @@ router.post("/api/miniapp/nutrition/orders", async (req: Request, res: Response)
 					phoneNumber,
 				},
 			},
+		);
+
+		const userLabel = user?.username ? `@${user.username}` : `tg:${telegramId}`;
+		await notifyAdmins(
+			`Новая заявка на питание.\nИмя: ${fullName}\nТелефон: ${phoneNumber}\nПользователь: ${userLabel}`,
 		);
 
 		res.status(201).json({ id: order._id.toString() });

@@ -8,6 +8,10 @@ import TrainingGoal from "../models/TrainingGoal.js";
 import User from "../models/User.js";
 import { logAppError } from "../utils/logAppError.js";
 import {
+	resolveTelegramChatId,
+	sendTelegramMessage,
+} from "../utils/telegram.js";
+import {
 	buildTrainingFileViewData,
 	extractGoalTitle,
 	isExcelAttachment,
@@ -21,6 +25,30 @@ import {
 } from "./utils.js";
 
 const router = express.Router();
+
+async function notifyUser(
+	telegramId: number,
+	message: string,
+	req: Request,
+): Promise<void> {
+	const recipient = await User.findOne({ telegramId })
+		.select("telegramId chatId")
+		.lean<{ telegramId?: number; chatId?: number } | null>();
+	const chatId = resolveTelegramChatId(recipient);
+	if (!chatId) return;
+	try {
+		await sendTelegramMessage(chatId, message);
+	} catch (error) {
+		await logAppError(
+			error,
+			withAdminContext(req, {
+				source: "telegram-notify",
+				path: req.path,
+				method: req.method,
+			}),
+		);
+	}
+}
 
 router.get("/admin/main", (req: Request, res: Response) => {
 	res.render("admin/main", {
@@ -470,6 +498,12 @@ router.post("/api/admin/requests/:id/accept", async (req: Request, res: Response
 			{ $set: { trainingStatus: "active" } },
 		);
 
+		await notifyUser(
+			updated.telegramUserId,
+			"Ваша заявка на тренировку рассмотрена. План добавлен в раздел «Мои заявки».",
+			req,
+		);
+
 		res.json({ status: "accepted" });
 	} catch (error) {
 		await logAppError(
@@ -542,6 +576,12 @@ router.post("/api/admin/nutrition/requests/:id/accept", async (req: Request, res
 		await User.updateOne(
 			{ telegramId: updated.telegramUserId },
 			{ $set: { nutritionStatus: "active" } },
+		);
+
+		await notifyUser(
+			updated.telegramUserId,
+			"Ваша заявка на питание рассмотрена. План добавлен в раздел «Мои заявки».",
+			req,
 		);
 
 		res.json({ status: "accepted" });

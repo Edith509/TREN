@@ -207,7 +207,10 @@ bot.start(async (ctx) => {
 		console.log(`Failed to save user: ${error}`);
 	}
 
-	await ctx.reply(START_MESSAGE);
+	await ctx.reply(
+		START_MESSAGE,
+		Markup.inlineKeyboard([Markup.button.webApp("Открыть миниапп", MINI_APP_URL)]),
+	);
 });
 
 bot.command("admin", async (ctx) => {
@@ -404,7 +407,6 @@ bot.action("broadcast_send", async (ctx) => {
 
 bot.catch((error) => {
 	console.log(`Bot error: ${error}`);
-	logAppError(error, { source: "telegram-bot" }).catch(() => undefined);
 });
 
 export async function startBot(): Promise<void> {
